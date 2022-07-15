@@ -1,16 +1,15 @@
 import socket
 import re
-import json
-import pandas as pd
 import os
 import time
 
-# HOST = "whois.tcinet.ru"
-FILE = "domains.xlsx"
+# infile name
+FILE = "domains.csv"
 PORT = 43
 
 GOD_HOST = "whois.iana.org"
 
+# forced whois server
 WHOIS = {
     "uz": "whois.uz",
     "ro": "www.nic.ro",
@@ -36,6 +35,7 @@ def get_data(url, whois):
         s.connect((whois, PORT))
         splt = url.split(".")
         if splt[-1] == "рф":
+            # getting valid url for рф
             res = []
             for part in splt:
                 tmp = []
@@ -49,29 +49,34 @@ def get_data(url, whois):
         return data
 
 
-def try_get_data(url, whois):
+def try_get_data(url, whois, pr_er):
     vars_ = [url, url + "\r\n", url + "\n"]
 
     for req in vars_:
         try:
             s = get_data(req, whois)
         except Exception as e:
-            print("Get data error: ", e)
+            if pr_er:
+                print("Get data error: ", e)
             continue
         if "timeout" in s.lower() or "timed out" in s.lower():
-            print("Get data timeout: ", s)
+            if pr_er:
+                print("Get data timeout: ", s)
             continue
         if s == "":
-            print("Empty")
+            if pr_er:
+                print("Empty")
             continue
         if len(s) < 50:
-            print(s)
+            if pr_er:
+                print(s)
             continue
         while len(s) < 170 and url.split(".")[-1] == "kg":
             try:
                 s = get_data(req, whois)
             except Exception as e:
-                print("Get data error: ", e)
+                if pr_er:
+                    print("Get data error: ", e)
                 continue
         return s
     return
@@ -85,45 +90,49 @@ def nserver(arr):
     return res
 
 
-def parsing(url, pr):
+def parsing(url, pr, pr_er):
     global err, WHOIS
     err = ""
+    domain = url.split(".")[-1]
     try:
-        whois = get_whois(url.split(".")[-1])
+
+        whois = get_whois(domain)
         if not whois:
-            whois = get_whois(url.split(".")[-1])
+            # try again
+            whois = get_whois(domain)
         whois = whois[0]
-        WHOIS[url.split(".")[-1]] = whois
+        WHOIS[domain] = whois
     except Exception as e:
-        print("Get Whois error: ", e)
+        if pr_er:
+            print("Get Whois error: ", e)
         err = "whois server не найден"
         return
     if pr:
         print("\nWhois server: ", whois)
         print("Domain: ", url, "\n")
-    s = try_get_data(url, whois)
+    s = try_get_data(url, whois, pr_er)
     if not os.path.exists(os.path.join("db")):
         os.mkdir(os.path.join("db"))
-    if not os.path.exists(os.path.join("db", url.split(".")[-1])):
-        os.mkdir(os.path.join("db", url.split(".")[-1]))
+    if not os.path.exists(os.path.join("db", domain)):
+        os.mkdir(os.path.join("db", domain))
     if not s:
         return
-    with open(os.path.join("db", url.split(".")[-1], "res.txt"), 'w') as f:
+    with open(os.path.join("db", domain, "res.txt"), 'w') as f:
         try:
             f.write(s)
         except Exception as e:
             f.write("Error: " + str(e))
     if pr:
         print("Output of whois server:\n", s)
-    print(json.dumps(s))
+
     ar = re.findall("[\t\n]*([^:\n%]+)[:n][\r\t\n ]+([^\n\r]+)[\r\n]+", s)
     # ar.append(nserver(ar))
 
-    d = dict(ar)
-    with open(os.path.join("db", url.split(".")[-1], "dict.json"), 'w') as f:
-        json.dump(d, f, indent=2)
-    if pr:
-        print("\nDict:\n", json.dumps(d, indent=2), "\n")
+    # d = dict(ar)
+    # with open(os.path.join("db", url.split(".")[-1], "dict.json"), 'w') as f:
+    #     json.dump(d, f, indent=2)
+    # if pr:
+    #     print("\nDict:\n", json.dumps(d, indent=2), "\n")
     return ar
 
 
@@ -156,18 +165,19 @@ def one_format(s):
     if len(s) < 3:
         return "a"
     s = "".join([s[0][:4], s[1], s[2]])
-    s = s.replace("Jan", "01")
-    s = s.replace("Feb", "02")
-    s = s.replace("Mar", "03")
-    s = s.replace("Apr", "04")
-    s = s.replace("May", "05")
-    s = s.replace("Jun", "06")
-    s = s.replace("Jul", "07")
-    s = s.replace("Aug", "08")
-    s = s.replace("Sep", "09")
-    s = s.replace("Oct", "10")
-    s = s.replace("Nov", "11")
-    s = s.replace("Dec", "12")
+    s = s.lower()
+    s = s.replace("jan", "01")
+    s = s.replace("feb", "02")
+    s = s.replace("mar", "03")
+    s = s.replace("apr", "04")
+    s = s.replace("may", "05")
+    s = s.replace("jun", "06")
+    s = s.replace("jul", "07")
+    s = s.replace("aug", "08")
+    s = s.replace("sep", "09")
+    s = s.replace("oct", "10")
+    s = s.replace("nov", "11")
+    s = s.replace("dec", "12")
     return s[:8]
 
 
@@ -184,7 +194,7 @@ def get_registar(d):
         if "organization" in key.lower():
             orgs.append(el[1])
     registars.sort()
-    print(registars, orgs)
+    # print(registars, orgs)
     if not registars:
         registars = orgs
     for i in range(len(registars) - 1, -1, -1):
@@ -195,30 +205,29 @@ def get_registar(d):
     if registars:
         # while ("www." in registars[-1] or "whois" in registars[-1]) and len(registars) > 1:
         #     del registars[-1]
-        return " \r\n".join(set(registars))
+        return '"' + " \n".join(set(registars)) + '"'
     return
 
 
 def get_org(d):
-    registars = []
+    orgs = []
     key_words = ["organization", "registrant", "org", "contact"]
-    del_words = ["please", "privacy", "@", " data protected", "hidden"]
+    del_words = ["please", "privacy", "@", " data protected", "hidden", "whois", "disclosed"]
     for el in d:
         key = el[0]
         for word in key_words:
             if word in key.lower() and len(key) < 3*len(word):
-                registars.append(el[1])
-    registars.sort()
-    print(registars)
-    for i in range(len(registars) - 1, -1, -1):
+                orgs.append(el[1])
+    # print(registars)
+    for i in range(len(orgs) - 1, -1, -1):
         for word in del_words:
-            if word in registars[i].lower() or registars[i].isdigit():
-                del registars[i]
+            if word in orgs[i].lower() or orgs[i].isdigit():
+                del orgs[i]
                 break
-    if registars:
-        while ("www." in registars[-1] or "whois" in registars[-1]) and len(registars) > 1:
-            del registars[-1]
-        return " \r\n".join(set(registars))
+    if orgs:
+        # while ("www." in orgs[-1] or "whois" in orgs[-1]) and len(registars) > 1:
+        #     del registars[-1]
+        return '"' + " \n".join(set(orgs)).replace('"', "''") + '"'
     return
 
 
@@ -234,8 +243,7 @@ def get_date(d):
                     continue
                 dates.append(date)
                 break
-    dates.sort()
-    print(dates)
+    # print(dates)
     for i in range(len(dates) - 1, -1, -1):
         if dates[i] <= time.strftime("%Y%m%d"):
             del dates[i]
@@ -245,10 +253,11 @@ def get_date(d):
     return
 
 
-def main(urls, pr=False):
+def main(urls, pr=False, pr_er=False):
     res = []
     for url in urls:
-        d = parsing(url, pr)
+        print(url, "in progress...")
+        d = parsing(url, pr, pr_er)
         date, org, reg = None, None, None
         if d:
             date = get_date(d)
@@ -285,49 +294,80 @@ def test(urls):
     ready = ["az", "asia", "biz", "com", "gr", "hk", "in", "info", "investment", "it", "net", "nl",
              "online", "org", "pl", "ru", "sk", "su", "tv", "tj", "uk", "рф"]
 
-    not_ready_url = [i if i.split(".")[-1] not in ready else "" for i in urls]
+    # not_ready_url = [i if i.split(".")[-1] not in ready else "" for i in urls]
 
     not_ready_url = urls
 
-    check = ["ru", "рф", "com", "org", "uk", "hk", "eu", "de"]
-    check = ["com"]
+    # check = ["ru", "рф", "com", "org", "uk", "hk", "eu", "de"]
+    check = ["ru"]
     check_urls = [i if i.split(".")[-1] in check else "" for i in not_ready_url]
     # check_urls = not_ready_url
     check_urls = set(check_urls)
     check_urls.remove("")
     print(check_urls)
-    out = main(check_urls, True)
+    out = main(check_urls, True, True)
 
-    df = pd.DataFrame(out)
-    df.to_excel("Outfile_test.xlsx")
+    header = ["url", "registrar", "organisation", "alert date", "registrar?", "org?", "date?"]
+    out = [header] + out
+    csv_out = ar_to_csv(out).replace(";None;", ";;")
+    OUTFILE = "Outfile_test.csv"
+    write_to_file(OUTFILE, csv_out)
 
 
 def prod(urls):
-    out = main(urls, True)
-    df = pd.DataFrame(out, columns=["url", "registrar", "organisation", "alert date", "registrar?", "org?", "date?"])
-    try:
-        df.to_excel("Outfile.xlsx")
-    except Exception:
-        input("Закрой файл!!!")
-        df.to_excel("Outfile.xlsx")
+    out = main(urls)
+    header = ["url", "registrar", "organisation", "alert date", "registrar?", "org?", "date?"]
+    out = [header] + out
+
+    csv_out = ar_to_csv(out).replace(",None,", ",,").replace(",None,", ",,")
+    OUTFILE = "Outfile.csv"
+    write_to_file(OUTFILE, csv_out)
 
 
 def test_prod(urls):
     out = test_main(urls, True)
-    df = pd.DataFrame(out, columns=["url", "registrar", "organisation", "alert date", "registrar?", "org?", "date?"])
+    header = ["url", "registrar", "organisation", "alert date", "registrar?", "org?", "date?"]
+    out = [header] + out
+    csv_out = ar_to_csv(out).replace(";None;", ";;").replace(";None;", ";;")
+    OUTFILE = "Outfile_testprod.csv"
+    write_to_file(OUTFILE, csv_out)
+
+
+def write_to_file(file, st):
     try:
-        df.to_excel("Outfile_testprod.xlsx")
+        with open(file, "wb") as f:
+            f.write(st.encode("utf-8"))
     except Exception:
         input("Закрой файл!!!")
-        df.to_excel("Outfile_testprod.xlsx")
+        with open(file, "wb") as f:
+            f.write(st.encode("utf-8"))
 
 
-xl = pd.read_excel(FILE, header=None)[0]
-urls = xl.values.tolist()
-urls = sorted(list(set(urls)), key=lambda x: x.split(".")[-1])
+def csv_to_ar(s):
+    res = []
+    ar = s.split("\n")
+    for i in ar:
+        res.append(i.split(";")[0])
+    return sorted(list(set(res)), key=lambda x: x.split(".")[-1])
+
+
+def ar_to_csv(ar):
+    tmp = []
+    for i in ar:
+        tmp.append(",".join([str(j) for j in i]))
+        print("%r" % tmp[-1])
+    return "\n".join(tmp)
+
+
 tt = time.time()
+with open(FILE) as f:
+    csv_in = f.read()
+urls = csv_to_ar(csv_in)
+urls.remove("")
 
-# test(urls)
+test(urls)
 # test_prod(urls)
-prod(urls)
+
+# prod(urls)
+
 print("Time: ", time.strftime("%M:%S", time.localtime(time.time() - tt)))
