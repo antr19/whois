@@ -1,3 +1,0 @@
-#TYPE System.DateTime
-"DisplayHint";"DateTime";"Date";"Day";"DayOfWeek";"DayOfYear";"Hour";"Kind";"Millisecond";"Minute";"Month";"Second";"Ticks";"TimeOfDay";"Year"
-"DateTime";"13 ???? 2022 ?. 12:59:19";"13.07.2022 0:00:00";"13";"Wednesday";"194";"12";"Local";"503";"59";"7";"19";"637933139595039862";"12:59:19.5039862";"2022"
